@@ -50,7 +50,6 @@ import static dev.langchain4j.agent.tool.JsonSchemaProperty.from;
 import static dev.langchain4j.agent.tool.JsonSchemaProperty.items;
 import static dev.langchain4j.agent.tool.JsonSchemaProperty.type;
 import static dev.langchain4j.model.mistralai.MistralAiChatModelName.MISTRAL_LARGE_LATEST;
-import static dev.langchain4j.model.openai.OpenAiChatModelName.GPT_3_5_TURBO_0613;
 import static dev.langchain4j.model.openai.OpenAiChatModelName.GPT_4_O;
 import static dev.langchain4j.model.openai.OpenAiChatModelName.GPT_4_O_MINI;
 import static dev.langchain4j.model.output.FinishReason.STOP;
@@ -121,7 +120,7 @@ class AiServicesWithToolsIT {
                         .baseUrl(System.getenv("OPENAI_BASE_URL"))
                         .apiKey(System.getenv("OPENAI_API_KEY"))
                         .organizationId(System.getenv("OPENAI_ORGANIZATION_ID"))
-                        .modelName(GPT_3_5_TURBO_0613) // this model can only call tools sequentially
+                        .modelName(GPT_4_O_MINI)
                         .temperature(0.0)
                         .logRequests(true)
                         .logResponses(true)
@@ -472,7 +471,7 @@ class AiServicesWithToolsIT {
 
     @ParameterizedTest
     @MethodSource("models")
-    @Disabled("should be enabled once List<Double> is automatically converted into List<Integer>")
+    @Disabled("should be enabled once List<Double> is automatically converted into List<Integer>") // https://github.com/langchain4j/langchain4j/issues/1858
     void should_use_tool_with_List_of_Integers_parameter(ChatLanguageModel chatLanguageModel) {
 
         IntegerListProcessor integerListProcessor = spy(new IntegerListProcessor());
@@ -957,5 +956,39 @@ class AiServicesWithToolsIT {
         assertThat(secondToolExecution.result()).contains("22.2");
 
         verify(spyChatLanguageModel, times(3)).generate(anyList(), anyList());
+    }
+
+    static class EnumTools {
+
+        public enum Color {
+            Red, Blue, Green, Yellow
+        }
+
+        @Tool
+        public void processColors(List<Color> colors) {
+            System.out.println(colors);
+        }
+    }
+
+    @Test
+    public void test() {
+
+        // given
+        EnumTools enumTools = spy(new EnumTools());
+
+        ChatMemory chatMemory = MessageWindowChatMemory.withMaxMessages(10);
+
+        ChatLanguageModel spyChatLanguageModel = spy(models().findFirst().get());
+
+        AssistantReturningResult assistant = AiServices.builder(AssistantReturningResult.class)
+                .chatLanguageModel(spyChatLanguageModel)
+                .chatMemory(chatMemory)
+                .tools(enumTools)
+                .build();
+
+        String userMessage = "Process these colors: reg, yellow";
+
+        // when
+        Result<AiMessage> result = assistant.chat(userMessage);
     }
 }
